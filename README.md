@@ -35,8 +35,8 @@ D:/Study/Home_work/COS30082/Project/
 │   │   ├───classifier/
 │   │   │   └───faiss_index.py  # FAISS index building and management
 │   │   └───mobilefacenet.py    # MobileFaceNet model and embedding logic
-│   ├───main.py             # Main real-time attendance system script
-│   ├───enrollment.py       # Student enrollment script
+│   ├───gui_app.py          # Main real-time attendance system GUI application
+│   ├───face_system.py      # Core facial recognition and attendance logic
 │   └───config.py           # Configuration parameters
 └───requirements.txt        # Python dependencies
 ```
@@ -81,33 +81,17 @@ Edit `src/config.py` to adjust paths, thresholds, and camera index as needed.
 
 ## Usage
 
-### 1. Enroll Students
+### 1. Run the Attendance System (GUI)
 
-Run the enrollment script to add new students to the system. This will capture multiple images of the student's face and save them to `data/faces/`.
-
-```bash
-python src/enrollment.py
-```
-
-Follow the prompts to enter the student ID and capture images.
-
-### 2. Build FAISS Index
-
-After enrolling students, you need to build the FAISS index. This process extracts facial embeddings from the enrolled student images and creates an efficient search index.
+Launch the main GUI application. This application handles both student enrollment and real-time attendance.
 
 ```bash
-python src/verification/classifier/faiss_index.py
+python src/gui_app.py
 ```
 
-This will create `models/faiss.index` and `models/faiss.index.labels`.
+**Enrollment:** Within the GUI, use the "Register Identity" button to enroll new students. The system will guide you through capturing facial data and automatically update the FAISS index.
 
-### 3. Run the Attendance System
-
-Once the FAISS index is built, you can run the real-time attendance system.
-
-```bash
-python src/main.py
-```
+**Attendance:** The system will continuously detect and recognize faces from the camera feed, performing anti-spoofing checks and logging attendance for recognized individuals.
 
 The system will open a webcam feed, detect faces, recognize enrolled students, perform anti-spoofing checks, and mark attendance in `data/attendance.csv`.
 

@@ -81,7 +81,7 @@ Edit `src/config.py` to adjust paths, thresholds, and camera index as needed.
 
 ## Usage
 
-### 1. Run the Attendance System (GUI)
+### Run the Attendance System (GUI)
 
 Launch the main GUI application. This application handles both student enrollment and real-time attendance.
 

@@ -1,0 +1,9 @@
+feat: Implement user removal and enhance model loading
+
+This commit introduces several new features and improvements:
+
+- Remove Identity: Users can now be removed from the system. This includes removing their embeddings from the FAISS index and deleting their face images.
+- Improved Model Loading: The model loading logic in `model_integration.py` and `MiniFASNet.py` has been updated for better compatibility and to handle different model variations.
+- GUI Enhancements: The GUI has been updated to include a "Remove Identity" feature and a list of registered identities.
+- ONNX Conversion Script: A new script `convert_mobilefacenet_to_onnx.py` has been added.
+- Updated Dependencies: The `requirements.txt` file has been updated.

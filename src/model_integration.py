@@ -5,6 +5,7 @@ import torch
 import numpy as np
 import tensorflow as tf
 import torch.nn.functional as F
+from collections import OrderedDict
 
 from src.model_lib.MiniFASNet import MiniFASNetV1, MiniFASNetV2,MiniFASNetV1SE,MiniFASNetV2SE
 
@@ -88,15 +89,19 @@ class AntiSpoofingPredictor:
         state_dict = torch.load(model_path, map_location=self.device)
         keys = iter(state_dict)
         first_layer_name = keys.__next__()
-        if first_layer_name.find('module.') >= 0:
-            from collections import OrderedDict
-            new_state_dict = OrderedDict()
-            for key, value in state_dict.items():
-                name_key = key[7:]
-                new_state_dict[name_key] = value
-            self.model.load_state_dict(new_state_dict)
-        else:
-            self.model.load_state_dict(state_dict)
+        new_state_dict = OrderedDict()
+        for key, value in state_dict.items():
+            name_key = key
+            if name_key.find('module.') >= 0:
+                name_key = name_key[7:]
+            if "conv_6_sep" in name_key:
+                name_key = name_key.replace("conv_6_sep", "conv6_sep")
+            if "conv_6_dw" in name_key:
+                name_key = name_key.replace("conv_6_dw", "conv6_dw")
+            if "num_batches_tracked" in name_key:
+                continue
+            new_state_dict[name_key] = value
+        self.model.load_state_dict(new_state_dict, strict=False)
         self.model.eval()
 
     def predict(self, img, model_path):
@@ -104,8 +109,8 @@ class AntiSpoofingPredictor:
         model_name = os.path.basename(model_path)
         h_input, w_input, _, _ = parse_model_name(model_name)
         img = cv2.resize(img, (w_input, h_input))
-        test_transform = trans.Compose([
-            trans.ToTensor(),
+        test_transform = Compose([
+            ToTensor(),
         ])
         img = test_transform(img)
         img = img.unsqueeze(0).to(self.device)

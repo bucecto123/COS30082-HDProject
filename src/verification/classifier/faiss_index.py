@@ -34,6 +34,34 @@ class FaissIndex:
                 results.append({"label": "Unknown", "distance": float('inf')})
         return results
 
+    def remove_identity(self, identity_name):
+        print(f"Attempting to remove identity: {identity_name}")
+        if identity_name not in self.labels:
+            print(f"Identity '{identity_name}' not found in the index.")
+            return False
+
+        new_embeddings = []
+        new_labels = []
+        old_embeddings = self.index.reconstruct_n(0, self.index.ntotal) # Get all embeddings
+
+        for i, label in enumerate(self.labels):
+            if label != identity_name:
+                new_embeddings.append(old_embeddings[i])
+                new_labels.append(label)
+
+        if not new_embeddings: # If all identities are removed
+            self.index = faiss.IndexFlatL2(self.embedding_dim)
+            self.labels = []
+            print(f"All identities removed. Index reset.")
+        else:
+            self.index = faiss.IndexFlatL2(self.embedding_dim)
+            self.index.add(np.array(new_embeddings).astype(np.float32))
+            self.labels = new_labels
+            print(f"Identity '{identity_name}' removed. New index size: {self.index.ntotal}")
+
+        self.save_index()
+        return True
+
     def save_index(self):
         faiss.write_index(self.index, self.index_path)
         # Save labels separately as FAISS only stores vectors

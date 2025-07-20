@@ -1,9 +1,9 @@
-
 import os
 import cv2
 import numpy as np
 import torch
 import tensorflow as tf
+import shutil
 
 from src.model_integration import FaceDetector, AntiSpoofingPredictor, MobileFaceNetEmbeddings
 from src.model_integration import parse_model_name
@@ -15,12 +15,12 @@ CAFFEMODEL_PATH = "D:/Study/Home_work/COS30082/Project/models/mtcnn/Widerface-Re
 DEPLOY_PROTOTXT_PATH = "D:/Study/Home_work/COS30082/Project/models/mtcnn/deploy.prototxt"
 
 class FaceSystem:
-    def __init__(self, device_id=0):
+    def __init__(self, faiss_index, device_id=0):
         self.face_detector = FaceDetector(CAFFEMODEL_PATH, DEPLOY_PROTOTXT_PATH)
         self.anti_spoofing_predictor = AntiSpoofingPredictor(device_id)
         self.mobilefacenet_embeddings_model = MobileFaceNetEmbeddings(MOBILEFACENET_MODEL_PATH)
         self.enrolled_identities = {}
-        self.faiss_index = None # Placeholder for FAISS index
+        self.faiss_index = faiss_index
         self.identities_file = "./data/enrolled_identities.pkl"
         self.load_identities()
 
@@ -104,6 +104,22 @@ class FaceSystem:
         else:  # Fake Face
             return None, "Fake Face, Score: {:.2f}".format(value)
 
+    def remove_identity(self, identity_name):
+        # Remove from FAISS index
+        if self.faiss_index.remove_identity(identity_name):
+            # Remove from enrolled_identities dictionary
+            if identity_name in self.enrolled_identities:
+                del self.enrolled_identities[identity_name]
+                self.save_identities()
+
+            # Remove face images directory
+            face_dir = os.path.join("data", "faces", identity_name)
+            if os.path.exists(face_dir):
+                shutil.rmtree(face_dir)
+                print(f"Removed face image directory for {identity_name}")
+            return True
+        return False
+
 if __name__ == '__main__':
     # Example Usage (requires a test image)
     # You'll need to replace 'path/to/your/image.jpg' with an actual image path
@@ -118,7 +134,10 @@ if __name__ == '__main__':
         print(f"Error: Test image not found at {test_image_path}")
         print("Please update 'test_image_path' in face_system.py to a valid image.")
     else:
-        face_system = FaceSystem()
+        # Initialize FaissIndex for testing purposes
+        from src.verification.classifier.faiss_index import FaissIndex
+        faiss_index_test = FaissIndex(embedding_dim=128) # Assuming 128 is the embedding dimension
+        face_system = FaceSystem(faiss_index_test)
         image = cv2.imread(test_image_path)
         if image is None:
             print(f"Error: Could not read image from {test_image_path}")
@@ -129,8 +148,7 @@ if __name__ == '__main__':
                 print(f"Embedding shape: {embedding.shape}")
                 # In a real system, you would now compare this embedding to your database
                 # For example:
-                # from src.verification.classifier.faiss_index import FaissIndex
-                # faiss_index = FaissIndex("path/to/your/faiss_index.bin")
+                # faiss_index = FaissIndex()
                 # distances, indices = faiss_index.search(embedding, k=1)
                 # if distances[0][0] < threshold:
                 #     print(f"Recognized as user with ID: {indices[0][0]}")

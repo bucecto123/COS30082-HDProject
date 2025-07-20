@@ -13,24 +13,44 @@ from src.attendance.attendance_logger import AttendanceLogger
 def main():
     # --- System Initialization ---
     print("[INFO] Initializing FaceSystem...")
-    face_system = FaceSystem()
     faiss_index = FaissIndex(embedding_dim=128)
+    face_system = FaceSystem(faiss_index)
     attendance_logger = AttendanceLogger()
     print("[INFO] System Initialized.")
 
     # --- PySimpleGUI Layout ---
     sg.theme("LightGrey1")
 
-    layout = [
-        [sg.Text("Face Recognition Attendance", size=(60, 1), justification='center')],
-        [sg.Image(filename='', key='-IMAGE-')],
-        [sg.Text("Status: Ready", key='-STATUS-', size=(40, 1))],
-        [sg.Button('Register Identity', size=(20, 2)), sg.Button('Recognize Face', size=(20, 2)), sg.Button('Exit', size=(10, 2))],
-        [sg.Text("Attendance Log:", size=(40, 1))],
-        [sg.Multiline(size=(60, 10), key='-LOG-', autoscroll=True, disabled=True)]
+    left_column = [
+        [sg.Text("Camera Feed", size=(40, 1), justification='center')],
+        [sg.Image(filename='', key='-IMAGE-', size=(400, 300))]
     ]
 
-    window = sg.Window('Face Recognition App', layout)
+    right_column = [
+        [sg.Text("Face Recognition Attendance", size=(40, 1), justification='center')],
+        [sg.Text("Status: Ready", key='-STATUS-', size=(30, 1))],
+        [sg.Button('Register Identity', size=(15, 2)), sg.Button('Recognize Face', size=(15, 2)), sg.Button('Exit', size=(8, 2))],
+        [sg.Text("Remove Identity:"), sg.Input(key='-REMOVE_NAME-', size=(15, 1)), sg.Button('Remove Identity', size=(12, 1))],
+        [sg.Text("Registered Identities:", size=(30, 1))],
+        [sg.Multiline(size=(40, 3), key='-IDENTITIES_LIST-', autoscroll=True, disabled=True, default_text="No identities registered.")],
+        [sg.Text("Attendance Log:", size=(30, 1))],
+        [sg.Multiline(size=(40, 5), key='-LOG-', autoscroll=True, disabled=True)]
+    ]
+
+    layout = [
+        [sg.Column(left_column), sg.Column(right_column)]
+    ]
+
+    window = sg.Window('Face Recognition App', layout, finalize=True)
+
+    def update_identities_list():
+        if face_system.enrolled_identities:
+            identities_str = "\n".join(face_system.enrolled_identities.keys())
+            window['-IDENTITIES_LIST-'].update(identities_str)
+        else:
+            window['-IDENTITIES_LIST-'].update("No identities registered.")
+
+    update_identities_list()
 
     # --- Video Capture ---
     cap = cv2.VideoCapture(0)
@@ -56,7 +76,7 @@ def main():
             cv2.rectangle(frame, (x, y), (x+w, y+h), (255, 0, 0), 2)
 
         # --- Resize and Update GUI Image ---
-        display_frame = cv2.resize(frame, (800, 600)) # Resize for display
+        display_frame = cv2.resize(frame, (640, 480)) # Resize for display
         imgbytes = cv2.imencode('.png', display_frame)[1].tobytes()
         window['-IMAGE-'].update(data=imgbytes)
 
@@ -86,8 +106,22 @@ def main():
                     faiss_index.add_embeddings([avg_embedding], [name])
                     sg.popup('Success', f'Successfully registered {name}!')
                     window['-STATUS-'].update(f'Status: Registered {name}')
+                    update_identities_list()
                 else:
                     window['-STATUS-'].update('Status: Registration Failed')
+
+        if event == 'Remove Identity':
+            name_to_remove = values['-REMOVE_NAME-']
+            if name_to_remove:
+                if face_system.remove_identity(name_to_remove):
+                    sg.popup('Success', f'Successfully removed {name_to_remove}!')
+                    window['-STATUS-'].update(f'Status: Removed {name_to_remove}')
+                    update_identities_list()
+                else:
+                    sg.popup_error('Removal Failed', f'Could not remove {name_to_remove}. Check if the name exists.')
+                    window['-STATUS-'].update('Status: Removal Failed')
+            else:
+                sg.popup_error('Input Error', 'Please enter a name to remove.')
 
         if event == 'Recognize Face':
             window['-STATUS-'].update('Status: Recognizing face...')

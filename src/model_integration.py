@@ -38,23 +38,42 @@ class FaceDetector:
 
 class AntiSpoofingPredictor:
     def __init__(self, device_id=0):
+        # Keep one ONNX session alive to avoid heavy reload each inference
         self.session = None
         self.input_name = None
         self.output_name = None
+        self.current_model_path = None  # track which model is currently loaded
 
     def _load_model(self, model_path):
-        self.session = onnxruntime.InferenceSession(model_path, providers=onnxruntime.get_available_providers())
-        self.input_name = self.session.get_inputs()[0].name
-        self.output_name = self.session.get_outputs()[0].name
+        """Load the ONNX model only if it is not already loaded."""
+        if self.session is None or model_path != self.current_model_path:
+            self.session = onnxruntime.InferenceSession(
+                model_path,
+                providers=onnxruntime.get_available_providers()
+            )
+            self.input_name = self.session.get_inputs()[0].name
+            self.output_name = self.session.get_outputs()[0].name
+            self.current_model_path = model_path
 
     def predict(self, img, model_path):
+        # Ensure model is loaded (will be a no-op if already loaded)
         self._load_model(model_path)
+
         model_name = os.path.basename(model_path)
         h_input, w_input = parse_model_name(model_name)
+
+        # Pre-processing -----------------------------------------------------
+        # 1. BGR ➜ RGB because OpenCV loads BGR by default
+        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+        # 2. Resize to model input
         img = cv2.resize(img, (w_input, h_input))
-        img = img.transpose((2, 0, 1))  # HWC to CHW
-        img = np.expand_dims(img, axis=0)  # Add batch dimension
-        img = img.astype(np.float32) / 255.0  # Normalize to [0, 1]
+        # 3. Scale to [-1, 1] (MiniFASNet training scheme)
+        img = img.astype(np.float32)
+        img = (img / 255.0 - 0.5) / 0.5
+        # 4. HWC ➜ CHW and add batch dim
+        img = img.transpose((2, 0, 1))  # CHW
+        img = np.expand_dims(img, axis=0)
+        # -------------------------------------------------------------------
 
         outputs = self.session.run([self.output_name], {self.input_name: img})
         return outputs[0]

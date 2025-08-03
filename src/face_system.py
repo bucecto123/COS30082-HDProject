@@ -92,7 +92,8 @@ class FaceSystem:
 
         # Apply softmax to get probabilities
         softmax_scores = torch.nn.functional.softmax(torch.from_numpy(prediction), dim=1).numpy()
-        real_score = softmax_scores[0][1]
+        # The model outputs [fake, photo, real]
+        real_score = softmax_scores[0][2]
 
         print(f"Anti-spoofing real score: {real_score:.4f}, Threshold: {ANTISPOOF_THRESHOLD}")
 

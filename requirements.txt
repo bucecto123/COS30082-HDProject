@@ -1,12 +1,21 @@
+# For Jetson, install PyTorch and Torchvision from NVIDIA's sources
+# torch
+# torchvision
+
+# For Jetson, install onnxruntime-gpu
+# onnxruntime
+
+# For Jetson, build and install faiss-gpu from source
+# faiss-cpu
+
 tensorflow
-torch
-torchvision
 opencv-python==4.2.0.34
 numpy
 Pillow
 tqdm
 easydict
 tensorboardX
-faiss-cpu
 pandas
 onnxruntime
+onnx-tf
+tensorflow-probability

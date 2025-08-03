@@ -1,55 +1,18 @@
 import os
 import cv2
 import math
-import torch
 import numpy as np
 import tensorflow as tf
-import torch.nn.functional as F
-from collections import OrderedDict
+import onnxruntime
 
-from src.model_lib.MiniFASNet import MiniFASNetV1, MiniFASNetV2,MiniFASNetV1SE,MiniFASNetV2SE
-
-# --- Functions extracted from SilentFaceAntiSpoofing/src/utility.py ---
-def get_kernel(height, width):
-    kernel_size = ((height + 15) // 16, (width + 15) // 16)
-    return kernel_size
-
+# --- Functions extracted and simplified from SilentFaceAntiSpoofing/src/utility.py ---
 def parse_model_name(model_name):
     info = model_name.split('_')[0:-1]
     h_input, w_input = info[-1].split('x')
-    model_type = model_name.split('.pth')[0].split('_')[-1]
+    return int(h_input), int(w_input)
 
-    if info[0] == "org":
-        scale = None
-    else:
-        scale = float(info[0])
-    return int(h_input), int(w_input), model_type, scale
 
-# --- Classes extracted and simplified from SilentFaceAntiSpoofing/src/data_io/transform.py ---
-class Compose(object):
-    def __init__(self, transforms):
-        self.transforms = transforms
 
-    def __call__(self, img):
-        for t in self.transforms:
-            img = t(img)
-        return img
-
-class ToTensor(object):
-    def __call__(self, pic):
-        if isinstance(pic, np.ndarray):
-            # handle numpy array: HWC to CHW, normalize to [0, 1]
-            img = torch.from_numpy(pic.transpose((2, 0, 1))).float().div(255)
-            return img
-        # Add handling for PIL Image if necessary, but for this project, numpy array is expected.
-        raise TypeError(f"pic should be PIL Image or ndarray. Got {type(pic)}")
-
-MODEL_MAPPING = {
-    'MiniFASNetV1': MiniFASNetV1,
-    'MiniFASNetV2': MiniFASNetV2,
-    'MiniFASNetV1SE': MiniFASNetV1SE,
-    'MiniFASNetV2SE': MiniFASNetV2SE
-}
 
 class FaceDetector:
     def __init__(self, caffemodel_path, deploy_prototxt_path):
@@ -75,49 +38,26 @@ class FaceDetector:
 
 class AntiSpoofingPredictor:
     def __init__(self, device_id=0):
-        self.device = torch.device("cuda:{}".format(device_id)
-                                   if torch.cuda.is_available() else "cpu")
-        self.model = None
-        self.kernel_size = None
+        self.session = None
+        self.input_name = None
+        self.output_name = None
 
     def _load_model(self, model_path):
-        model_name = os.path.basename(model_path)
-        h_input, w_input, model_type, _ = parse_model_name(model_name)
-        self.kernel_size = get_kernel(h_input, w_input)
-        self.model = MODEL_MAPPING[model_type](conv6_kernel=self.kernel_size).to(self.device)
-
-        state_dict = torch.load(model_path, map_location=self.device)
-        keys = iter(state_dict)
-        first_layer_name = keys.__next__()
-        new_state_dict = OrderedDict()
-        for key, value in state_dict.items():
-            name_key = key
-            if name_key.find('module.') >= 0:
-                name_key = name_key[7:]
-            if "conv_6_sep" in name_key:
-                name_key = name_key.replace("conv_6_sep", "conv6_sep")
-            if "conv_6_dw" in name_key:
-                name_key = name_key.replace("conv_6_dw", "conv6_dw")
-            if "num_batches_tracked" in name_key:
-                continue
-            new_state_dict[name_key] = value
-        self.model.load_state_dict(new_state_dict, strict=False)
-        self.model.eval()
+        self.session = onnxruntime.InferenceSession(model_path, providers=onnxruntime.get_available_providers())
+        self.input_name = self.session.get_inputs()[0].name
+        self.output_name = self.session.get_outputs()[0].name
 
     def predict(self, img, model_path):
         self._load_model(model_path)
         model_name = os.path.basename(model_path)
-        h_input, w_input, _, _ = parse_model_name(model_name)
+        h_input, w_input = parse_model_name(model_name)
         img = cv2.resize(img, (w_input, h_input))
-        test_transform = Compose([
-            ToTensor(),
-        ])
-        img = test_transform(img)
-        img = img.unsqueeze(0).to(self.device)
-        with torch.no_grad():
-            result = self.model.forward(img)
-            result = F.softmax(result).cpu().numpy()
-        return result
+        img = img.transpose((2, 0, 1))  # HWC to CHW
+        img = np.expand_dims(img, axis=0)  # Add batch dimension
+        img = img.astype(np.float32) / 255.0  # Normalize to [0, 1]
+
+        outputs = self.session.run([self.output_name], {self.input_name: img})
+        return outputs[0]
 
 class MobileFaceNetEmbeddings:
     def __init__(self, model_path):

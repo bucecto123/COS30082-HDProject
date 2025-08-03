@@ -27,7 +27,7 @@ class MobileFaceNet:
                     tf.keras.layers.InputLayer(input_shape=(INPUT_SIZE[0], INPUT_SIZE[1], 3)),
                     tf.keras.layers.Conv2D(32, (3, 3), activation='relu'),
                     tf.keras.layers.Flatten(),
-                    tf.keras.layers.Dense(128) # Output embedding size
+                    tf.keras.layers.Dense(128)
                 ])
 
     def embed(self, face_image):

@@ -10,7 +10,9 @@ from src.model_integration import parse_model_name
 from src.recognition_metrics import euclidean_distance, cosine_similarity, cosine_distance
 
 MOBILEFACENET_MODEL_PATH = "D:/Study/Home_work/COS30082/Project/models/mobilefacenet/MobileFaceNet_9925_9680.pb"
-ANTI_SPOOF_MODEL_DIR = "D:/Study/Home_work/COS30082/Project/models/antispoof/"
+from src.config import ANTISPOOF_THRESHOLD, ANTISPOOF_MODEL_PATH
+
+ANTI_SPOOF_MODEL_PATH = "D:/Study/Home_work/COS30082/Project/models/antispoof/2.7_80x80_MiniFASNetV2.onnx"
 CAFFEMODEL_PATH = "D:/Study/Home_work/COS30082/Project/models/mtcnn/Widerface-RetinaFace.caffemodel"
 DEPLOY_PROTOTXT_PATH = "D:/Study/Home_work/COS30082/Project/models/mtcnn/deploy.prototxt"
 
@@ -82,27 +84,27 @@ class FaceSystem:
             return None, "No face detected"
 
         # 2. Anti-Spoofing
-        prediction = np.zeros((1, 3))
-        for model_name in os.listdir(ANTI_SPOOF_MODEL_DIR):
-            if not model_name.endswith('.pth'):
-                continue
-            model_path = os.path.join(ANTI_SPOOF_MODEL_DIR, model_name)
-            # The AntiSpoofingPredictor handles cropping internally now
-            img_cropped = frame[image_bbox[1]:image_bbox[1]+image_bbox[3], image_bbox[0]:image_bbox[0]+image_bbox[2]]
-            prediction += self.anti_spoofing_predictor.predict(img_cropped, model_path)
+        # The AntiSpoofingPredictor handles cropping internally
+        img_cropped = frame[image_bbox[1]:image_bbox[1]+image_bbox[3], image_bbox[0]:image_bbox[0]+image_bbox[2]]
+        
+        # Use the specific ONNX model path
+        prediction = self.anti_spoofing_predictor.predict(img_cropped, ANTI_SPOOF_MODEL_PATH)
 
-        label = np.argmax(prediction)
-        value = prediction[0][label] / 2
+        # Apply softmax to get probabilities
+        softmax_scores = torch.nn.functional.softmax(torch.from_numpy(prediction), dim=1).numpy()
+        real_score = softmax_scores[0][1]
 
-        if label == 1:  # Real Face
+        print(f"Anti-spoofing real score: {real_score:.4f}, Threshold: {ANTISPOOF_THRESHOLD}")
+
+        if real_score >= ANTISPOOF_THRESHOLD:  # Real Face
             # 3. Face Embedding (MobileFaceNet)
             face_img = frame[image_bbox[1]:image_bbox[1]+image_bbox[3], image_bbox[0]:image_bbox[0]+image_bbox[2]]
-            face_img = cv2.resize(face_img, (112, 112)) # RESIZE TO 112x112 for MobileFaceNet
+            face_img = cv2.resize(face_img, (112, 112))
             embedding = self.mobilefacenet_embeddings_model.get_embeddings(face_img)
             
-            return embedding, "Real Face, Score: {:.2f}".format(value)
+            return embedding, f"Real Face, Score: {real_score:.2f}"
         else:  # Fake Face
-            return None, "Fake Face, Score: {:.2f}".format(value)
+            return None, f"Fake Face, Score: {real_score:.2f}"
 
     def remove_identity(self, identity_name):
         # Remove from FAISS index
@@ -124,9 +126,7 @@ if __name__ == '__main__':
     # Example Usage (requires a test image)
     # You'll need to replace 'path/to/your/image.jpg' with an actual image path
     # and ensure the model paths are correct.
-    
-    # For testing, you can use an image from the Silent-Face-Anti-Spoofing/images/sample directory
-    # For example: D:/Study/Home_work/COS30082/Project/Silent-Face-Anti-Spoofing/images/sample/image_F1.jpg
+
     
     test_image_path = "D:/Study/Home_work/COS30082/Project/SilentFaceAntiSpoofing/images/sample/image_F1.jpg"
     

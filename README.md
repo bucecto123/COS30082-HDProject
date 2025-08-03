@@ -1,98 +1,64 @@
-# Real-time Facial Recognition Attendance System for Jetson
+# Face Recognition Based Attendance System
 
-This project implements a real-time facial recognition attendance system optimized for NVIDIA Jetson devices. It leverages MobileFaceNet for face recognition, MTCNN for face detection, includes an anti-spoofing mechanism, utilizes a FAISS vector database for efficient similarity search, and is optimized with TensorRT for improved performance.
+This project is a real-time attendance system that uses face recognition to identify individuals and log their attendance. It features a graphical user interface (GUI) for easy interaction, and is designed to be deployable on edge devices like the NVIDIA Jetson series.
 
 ## Features
 
--   **Real-time Face Detection:** Uses MTCNN to accurately detect faces in video streams.
--   **Face Recognition:** Employs MobileFaceNet for robust facial feature extraction and recognition.
--   **Anti-Spoofing:** Incorporates a basic anti-spoofing mechanism to prevent fraudulent attendance.
--   **FAISS Vector Database:** Efficiently stores and searches facial embeddings for quick recognition.
--   **TensorRT Optimization:** Accelerates model inference for MobileFaceNet and Anti-Spoofing models on Jetson.
--   **Multi-threading:** Processes video frames and performs recognition in parallel for enhanced performance.
--   **Student Enrollment Interface:** A simple command-line interface to enroll new students by capturing their facial data.
--   **Performance Monitoring:** Displays real-time FPS to monitor system performance.
+*   **Real-time Face Recognition:** Identifies users from a live video stream.
+*   **Attendance Logging:** Logs attendance to a CSV file with timestamps.
+*   **User Management:**
+    *   Enroll new users by capturing their face images.
+    *   Remove existing users from the system.
+*   **Liveness Detection:** Prevents spoofing attacks using a liveness detection model.
+*   **GUI:** An easy-to-use interface for managing the system.
 
-## Project Structure
+## Models Used
 
-```
-D:/Study/Home_work/COS30082/Project/
-├───data/
-│   ├───faces/              # Stores enrolled student face images
-│   └───attendance.csv      # Records attendance logs
-├───models/
-│   ├───mtcnn/              # MTCNN model files
-│   ├───mobilefacenet/      # MobileFaceNet model files (.h5 or .trt)
-│   └───antispoof/          # Anti-spoofing model files (.onnx or .trt)
-├───src/
-│   ├───antispoof/
-│   │   └───anti_spoofing.py    # Anti-spoofing model and logic
-│   ├───attendance/
-│   ├───detection/
-│   ├───utils/
-│   │   └───tensorrt_utils.py   # TensorRT inference utility
-│   ├───verification/
-│   │   ├───classifier/
-│   │   │   └───faiss_index.py  # FAISS index building and management
-│   │   └───mobilefacenet.py    # MobileFaceNet model and embedding logic
-│   ├───gui_app.py          # Main real-time attendance system GUI application
-│   ├───face_system.py      # Core facial recognition and attendance logic
-│   └───config.py           # Configuration parameters
-└───requirements.txt        # Python dependencies
-```
+This project utilizes pre-trained models from the following repositories:
 
-## Setup Instructions
+*   **MobileFaceNet:** For face recognition, we use the MobileFaceNet model from [sirius-ai/MobileFaceNet_TF](https://github.com/sirius-ai/MobileFaceNet_TF). This model is lightweight and efficient, making it ideal for edge devices.
+*   **Silent-Face-Anti-Spoofing:** For liveness detection, we use the models from [minivision-ai/Silent-Face-Anti-Spoofing](https://github.com/minivision-ai/Silent-Face-Anti-Spoofing). These models are effective at preventing spoofing attacks from photos and videos.
 
-### 1. Clone the Repository
+We are grateful to the authors of these repositories for making their work publicly available.
 
-```bash
-git clone <repository_url>
-cd Project
-```
+## Deployment on Jetson
 
-### 2. Install Dependencies
+To deploy this project on a Jetson device, you will need to make the following adjustments:
 
-It is highly recommended to use a virtual environment.
+1.  **Install System Dependencies:**
+    ```bash
+    sudo apt-get update
+    sudo apt-get install -y libgl1-mesa-glx libglib2.0-0 libsm6 libxext6 libxrender-dev
+    ```
 
-```bash
-pip install -r requirements.txt
-```
+2.  **Install PyTorch and Torchvision:**
+    Follow the instructions on the NVIDIA forums to install the correct versions of PyTorch and Torchvision for your Jetson device.
 
-**Note:** `tensorflow`, `faiss-cpu`, `mtcnn`, `opencv-python`, `torch`, `torchvision`, `onnxruntime`, and `pandas` might require specific installations depending on your Jetson environment and CUDA/cuDNN versions. Refer to their official documentation for Jetson-specific installation guides.
+3.  **Install ONNX Runtime for GPU:**
+    ```bash
+    pip install onnxruntime-gpu
+    ```
 
-### 3. Download and Convert Pre-trained Models
+4.  **Install FAISS for GPU:**
+    You will need to build and install FAISS from source with GPU support.
 
-This project assumes you have pre-trained models for MTCNN, MobileFaceNet, and an Anti-Spoofing model. You need to place these models in their respective directories:
+5.  **Convert Models to TensorRT Engines:**
+    To get the best performance, you should convert the ONNX models to TensorRT engines using the provided utilities in `src/utils/tensorrt_utils.py`.
 
--   **MTCNN:** Place MTCNN model files (e.g., `pnet.npy`, `rnet.npy`, `onet.npy`) into `models/mtcnn/`.
--   **MobileFaceNet:** Place your pre-trained MobileFaceNet model (e.g., `mobilefacenet.h5`) into `models/mobilefacenet/`. If you have a TensorRT engine, place `mobilefacenet.trt` here.
--   **Anti-Spoofing (Silent-Face-Anti-Spoofing):** The models from the [Silent-Face-Anti-Spoofing repository](https://github.com/minivision-ai/Silent-Face-Anti-Spoofing) are typically in `.pth` (PyTorch) format. **These `.pth` models are not directly compatible with this system.** You need to convert them to ONNX format first, and then place the converted `.onnx` file (e.g., `2.7_80x80_MiniFASNetV2.onnx` or `4_0_0_80x80_MiniFASNetV1SE.onnx`) into `models/antispoof/`. If you have converted it further to a TensorRT engine, place `antispoofing_model.trt` here.
+## Getting Started
 
-    **Converting .pth to ONNX:**
-    Refer to the Silent-Face-Anti-Spoofing repository's documentation or common PyTorch to ONNX export methods. A typical approach involves loading the `.pth` model in PyTorch and then using `torch.onnx.export`.
+1.  **Clone the repository:**
+    ```bash
+    git clone <repository-url>
+    cd <repository-directory>
+    ```
 
-**TensorRT Conversion (Optional but Recommended for Jetson):**
+2.  **Install the dependencies:**
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-To leverage TensorRT for optimized inference, you will need to convert your TensorFlow/Keras models (`.h5`) or ONNX models (`.onnx`) to TensorRT engines (`.trt`). This process is specific to your Jetson device and TensorRT installation. You can typically use `tf.saved_model.save` to save your Keras model as a SavedModel, and then use `tf.experimental.tensorrt.Converter` or `trtexec` to convert it to a `.trt` engine. For ONNX models, you can use `trtexec` directly or the TensorRT Python API.
-
-### 4. Configure the System
-
-Edit `src/config.py` to adjust paths, thresholds, and camera index as needed.
-
-## Usage
-
-### Run the Attendance System (GUI)
-
-Launch the main GUI application. This application handles both student enrollment and real-time attendance.
-
-```bash
-python src/gui_app.py
-```
-
-**Enrollment:** Within the GUI, use the "Register Identity" button to enroll new students. The system will guide you through capturing facial data and automatically update the FAISS index.
-
-**Attendance:** The system will continuously detect and recognize faces from the camera feed, performing anti-spoofing checks and logging attendance for recognized individuals.
-
-The system will open a webcam feed, detect faces, recognize enrolled students, perform anti-spoofing checks, and mark attendance in `data/attendance.csv`.
-
-Press 'q' to quit the application.
+3.  **Run the application:**
+    ```bash
+    python src/gui_app.py
+    ```

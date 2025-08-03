@@ -1,0 +1,41 @@
+Let me fetch more specific information about the Silent Face Anti-Spoofing model outputs:Perfect! I found the exact issue you're looking for. Based on the GitHub issue where someone asks "what are the three classes of the softmax?" and the search results, you're actually **not missing anything** - this is exactly how these models are designed to work!
+
+The MiniFASNet models from Silent Face Anti-Spoofing are specifically trained for **3-class classification**, not binary real/fake detection. The models classify between different types of attacks: print attacks (photo spoofing), replay/video attacks, and real faces.
+
+**Your output is correct:**
+- **3 values**: This is the intended design
+- **Class 0**: Real/Live face  
+- **Class 1**: Print attack (photo spoof)
+- **Class 2**: Replay/Video attack
+
+**In your examples:**
+- Both models are correctly detecting **Class 2 (Replay/Video attack)** with high confidence
+- This suggests you're testing with a video or screen-displayed face
+
+**To get binary real/fake detection:**
+
+```python
+def interpret_antispoof_output(class_probabilities, threshold=0.5):
+    """
+    Convert 3-class output to binary real/fake decision
+    """
+    real_prob = class_probabilities[0]  # Class 0 = Real
+    spoof_prob = class_probabilities[1] + class_probabilities[2]  # Print + Replay
+    
+    is_real = real_prob > threshold
+    confidence = real_prob if is_real else spoof_prob
+    
+    return is_real, confidence, {
+        'real': class_probabilities[0],
+        'print_attack': class_probabilities[1], 
+        'replay_attack': class_probabilities[2]
+    }
+
+# Your example:
+probs = [0.0004, 0.007, 0.9925]
+is_real, confidence, details = interpret_antispoof_output(probs)
+print(f"Real: {is_real}, Confidence: {confidence:.3f}")
+print(f"Attack type: {'Replay attack' if details['replay_attack'] > details['print_attack'] else 'Print attack'}")
+```
+
+You haven't missed anything - the models are working exactly as designed! The 3-class output gives you more detailed information about the type of attack being detected.

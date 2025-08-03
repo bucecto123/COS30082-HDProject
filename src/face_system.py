@@ -77,7 +77,7 @@ class FaceSystem:
 
         return recognized_name, recognition_method
 
-    def process_frame(self, frame):
+    def process_frame(self, frame, scale=2.7):
         # 1. Face Detection
         image_bbox = self.face_detector.get_bbox(frame)
         if not image_bbox:
@@ -85,15 +85,27 @@ class FaceSystem:
 
         # 2. Anti-Spoofing
         # The AntiSpoofingPredictor handles cropping internally
-        img_cropped = frame[image_bbox[1]:image_bbox[1]+image_bbox[3], image_bbox[0]:image_bbox[0]+image_bbox[2]]
+        x, y, w, h = image_bbox
+        
+        # Scale the bounding box
+        new_w = int(w * scale)
+        new_h = int(h * scale)
+        
+        # Adjust the origin to keep the center
+        new_x = x - (new_w - w) // 2
+        new_y = y - (new_h - h) // 2
+        
+        # Ensure the new bounding box is within the frame
+        new_x = max(0, new_x)
+        new_y = max(0, new_y)
+        new_w = min(frame.shape[1] - new_x, new_w)
+        new_h = min(frame.shape[0] - new_y, new_h)
+        
+        img_cropped = frame[new_y:new_y+new_h, new_x:new_x+new_w]
         
         # Use the specific ONNX model path
-        prediction = self.anti_spoofing_predictor.predict(img_cropped, ANTI_SPOOF_MODEL_PATH)
-
-        # Apply softmax to get probabilities
-        softmax_scores = torch.nn.functional.softmax(torch.from_numpy(prediction), dim=1).numpy()
-        # The model outputs [fake, photo, real]
-        real_score = softmax_scores[0][2]
+        # predict() now returns the probability of real face directly
+        real_score = self.anti_spoofing_predictor.predict(img_cropped, ANTI_SPOOF_MODEL_PATH)
 
         print(f"Anti-spoofing real score: {real_score:.4f}, Threshold: {ANTISPOOF_THRESHOLD}")
 

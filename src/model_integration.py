@@ -11,9 +11,6 @@ def parse_model_name(model_name):
     h_input, w_input = info[-1].split('x')
     return int(h_input), int(w_input)
 
-
-
-
 class FaceDetector:
     def __init__(self, caffemodel_path, deploy_prototxt_path):
         self.detector = cv2.dnn.readNetFromCaffe(deploy_prototxt_path, caffemodel_path)
@@ -31,10 +28,13 @@ class FaceDetector:
         self.detector.setInput(blob, 'data')
         out = self.detector.forward('detection_out').squeeze()
         max_conf_index = np.argmax(out[:, 2])
-        left, top, right, bottom = out[max_conf_index, 3]*width, out[max_conf_index, 4]*height, \
-                                   out[max_conf_index, 5]*width, out[max_conf_index, 6]*height
-        bbox = [int(left), int(top), int(right-left+1), int(bottom-top+1)]
-        return bbox
+        confidence = out[max_conf_index, 2]
+        if confidence > self.detector_confidence:
+            left, top, right, bottom = out[max_conf_index, 3]*width, out[max_conf_index, 4]*height, \
+                                       out[max_conf_index, 5]*width, out[max_conf_index, 6]*height
+            bbox = [int(left), int(top), int(right-left+1), int(bottom-top+1)]
+            return bbox
+        return None
 
 class AntiSpoofingPredictor:
     def __init__(self, device_id=0):
@@ -63,20 +63,44 @@ class AntiSpoofingPredictor:
         h_input, w_input = parse_model_name(model_name)
 
         # Pre-processing -----------------------------------------------------
-        # 1. BGR ➜ RGB because OpenCV loads BGR by default
-        img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        # 2. Resize to model input
+        # Save original shape for debugging
+        orig_shape = img.shape
+        print(f"[AntiSpoofing] Original input shape: {orig_shape}")
+        
+        # 1. Resize to model input (80x80)
         img = cv2.resize(img, (w_input, h_input))
-        # 3. Scale to [-1, 1] (MiniFASNet training scheme)
-        img = img.astype(np.float32)
-        img = (img / 255.0 - 0.5) / 0.5
-        # 4. HWC ➜ CHW and add batch dim
-        img = img.transpose((2, 0, 1))  # CHW
+        
+        # 2. Convert to float32 and normalize to [0, 1]
+        img = img.astype(np.float32) / 255.0
+        
+        # 3. Convert HWC to CHW format
+        img = img.transpose((2, 0, 1))
+        
+        # 4. Add batch dimension
         img = np.expand_dims(img, axis=0)
-        # -------------------------------------------------------------------
-
+        
+        print(f"[AntiSpoofing] Processed input shape: {img.shape}")
+        # Run inference
         outputs = self.session.run([self.output_name], {self.input_name: img})
-        return outputs[0]
+        prediction = outputs[0]
+        
+        print(f"[AntiSpoofing] Raw output shape: {prediction.shape}")
+        print(f"[AntiSpoofing] Raw output values: {prediction}")
+        
+        # Apply softmax to get probabilities
+        prediction = prediction[0]  # Remove batch dimension
+        exp_preds = np.exp(prediction - np.max(prediction))
+        probabilities = exp_preds / np.sum(exp_preds)
+        
+        # MiniFASNetV2 class order: [background, fake, real]
+        background_prob = float(probabilities[0])
+        fake_prob = float(probabilities[1])
+        real_prob = float(probabilities[2])
+        
+        print(f"[AntiSpoofing] Probabilities: background={background_prob:.3f}, fake={fake_prob:.3f}, real={real_prob:.3f}")
+        
+        score = real_prob  # Use probability of real class
+        return score
 
 class MobileFaceNetEmbeddings:
     def __init__(self, model_path):

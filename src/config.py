@@ -22,7 +22,7 @@ INPUT_SIZE = (112, 112)
 RECOGNITION_THRESHOLD = 0.8
 
 # Threshold for anti-spoofing
-ANTISPOOF_THRESHOLD = 0.8
+ANTISPOOF_THRESHOLD = 0.5
 
 # Camera index
 CAMERA_INDEX = 0
